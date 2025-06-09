@@ -1,0 +1,69 @@
+from pdfminer.high_level import extract_pages
+from pdfminer.layout import LTTextContainer, LTChar
+from collections import defaultdict
+
+def extract_text_by_heading(pdf_path):
+    text_structure = defaultdict(lambda: defaultdict(list))
+    font_sizes = set()
+
+    elements = []
+
+    # Step 1: Extract text with font sizes
+    for page_layout in extract_pages(pdf_path):
+        for element in page_layout:
+            if isinstance(element, LTTextContainer):
+                for text_line in element:
+                    size = None
+                    text_content = text_line.get_text().strip()
+
+                    if not text_content:
+                        continue
+
+                    # Get average font size
+                    sizes = [char.size for char in text_line if isinstance(char, LTChar)]
+                    if sizes:
+                        size = round(sum(sizes) / len(sizes), 2)
+                        font_sizes.add(size)
+
+                    if size:
+                        elements.append((size, text_content))
+
+    # Step 2: Sort font sizes descending to classify headings
+    font_sizes = sorted(font_sizes, reverse=True)
+    if len(font_sizes) < 2:
+        print("Not enough variation in font size to infer headings.")
+        return
+
+    heading_size = font_sizes[0]
+    subheading_size = font_sizes[1]
+
+    current_heading = None
+    current_subheading = None
+
+    # Step 3: Organize content
+    for size, text in elements:
+        if size == heading_size:
+            current_heading = text
+            current_subheading = None
+        elif size == subheading_size:
+            current_subheading = text
+        else:
+            if current_heading:
+                if current_subheading:
+                    text_structure[current_heading][current_subheading].append(text)
+                else:
+                    text_structure[current_heading]["Uncategorized"].append(text)
+
+    return text_structure
+
+# --- Example Usage ---
+if __name__ == "__main__":
+    pdf_file = "sample.pdf"  # Replace with your PDF file path
+    structured_text = extract_text_by_heading(pdf_file)
+
+    for heading, sub_dict in structured_text.items():
+        print(f"\n=== {heading} ===")
+        for subheading, paragraphs in sub_dict.items():
+            print(f"  -- {subheading} --")
+            for para in paragraphs:
+                print(f"    {para}")
